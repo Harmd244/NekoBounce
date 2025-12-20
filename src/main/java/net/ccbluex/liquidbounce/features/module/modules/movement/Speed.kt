@@ -12,8 +12,7 @@ import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.aac.
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.aac.AACHop350
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.aac.AACHop4
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.aac.AACHop5
-import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.grim.GrimAC
-import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.grim.GrimCollide
+import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.grim.*
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.hypixel.HypixelHop
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.hypixel.HypixelLowHop
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.hypixel.WatchdogSpeed
@@ -85,6 +84,7 @@ object Speed : Module("Speed", Category.MOVEMENT) {
         // GrimAC
         GrimAC,
         GrimCollide,
+        Grim273FastFall,
 
         // Server specific
         TeleportCubeCraft,
@@ -137,6 +137,11 @@ object Speed : Module("Speed", Category.MOVEMENT) {
     val grimCollideSpeed by float("GrimCollide-Speed", 0.08f, 0.01f..0.08f) { mode.get() == "GrimCollide" }
     val grimacAmount by int("GrimAC-Amount", 3, 0..10) { mode.get() == "GrimAC" }
     val grimacAutoJump by boolean("GrimAC-AutoJump", true) { mode.get() == "GrimAC" }
+
+    // Grim273FastFall Speed
+    val fastFallStrength by float("FastFallStrength", 0.15f, 0.05f..0.5f) { mode.get() == "Grim2.3.73 1.9+ FastFall" }
+    val constantJump by boolean("ConstantJump", true) { mode.get() == "Grim2.3.73 1.9+ FastFall" }
+    val postPlacePackets by boolean("PostPlacePackets", true) { mode.get() == "Grim2.3.73 1.9+ FastFall" }
 
     // Custom Speed
     val customY by float("CustomY", 0.42f, 0f..4f) { mode.get() == "CustomSpeed" }

@@ -176,6 +176,8 @@ object StepConfirmEvent : Event()
  */
 object GameTickEvent : Event()
 
+object PreTickEvent : Event() // 好吧这个入是我从这个e QuickMarco Bounce里拿的
+
 object TickEndEvent : Event()
 
 /**
@@ -256,5 +258,6 @@ internal val ALL_EVENT_CLASSES = arrayOf(
     Render3DEvent::class.java,
     MotionEvent::class.java,
     WorldEvent::class.java,
-    DelayedPacketProcessEvent::class.java
+    DelayedPacketProcessEvent::class.java,
+    PreTickEvent::class.java // add
 )

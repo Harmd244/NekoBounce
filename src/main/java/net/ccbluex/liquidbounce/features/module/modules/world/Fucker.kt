@@ -3,6 +3,8 @@
  * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
  * https://github.com/CCBlueX/LiquidBounce/
  */
+//Code By Lizz
+//Skid Neko
 package net.ccbluex.liquidbounce.features.module.modules.world
 
 import net.ccbluex.liquidbounce.event.*
@@ -18,6 +20,7 @@ import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
 import net.ccbluex.liquidbounce.utils.extensions.eyes
 import net.ccbluex.liquidbounce.utils.extensions.onPlayerRightClick
 import net.ccbluex.liquidbounce.utils.extensions.rotation
+import net.ccbluex.liquidbounce.utils.render.RenderUtils
 import net.ccbluex.liquidbounce.utils.render.RenderUtils.drawBlockBox
 import net.ccbluex.liquidbounce.utils.render.RenderUtils.drawBlockDamageText
 import net.ccbluex.liquidbounce.utils.rotation.RotationSettings
@@ -28,7 +31,9 @@ import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.setTargetRotation
 import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.toRotation
 import net.ccbluex.liquidbounce.utils.timing.MSTimer
 import net.ccbluex.liquidbounce.utils.timing.TickedActions.nextTick
+import net.ccbluex.liquidbounce.utils.GlowUtils
 import net.minecraft.block.Block
+import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.init.Blocks
 import net.minecraft.network.play.client.C03PacketPlayer
 import net.minecraft.network.play.client.C07PacketPlayerDigging
@@ -55,14 +60,17 @@ object Fucker : Module("Fucker", Category.WORLD) {
     private val surroundings by boolean("Surroundings", true) { !hypixel }
     private val instant by boolean("Instant", false) { (action == "Destroy" || surroundings) && !hypixel }
 
+    // 添加 Matrix 选项
+    private val matrix by boolean("Matrix", false)
+
     private val switch by int("SwitchDelay", 250, 0..1000)
     private val swing by boolean("Swing", true)
     val noHit by boolean("NoHit", false)
 
-    // AirJumpFreeze feature
-    private val airJumpFreeze by boolean("AirJumpFreeze", false)
-
     private val options = RotationSettings(this).withoutKeepRotation()
+
+    private val blockProgress2D by boolean("BlockProgress2D", false)
+    private val progressBeginY by float("ProgressBeginY", 5F, 0F..40F)
 
     private val blockProgress by boolean("BlockProgress", true).subjective()
 
@@ -88,17 +96,20 @@ object Fucker : Module("Fucker", Category.WORLD) {
     var currentDamage = 0F
     var isOwnBed = false
 
-    // Surroundings
-    private var areSurroundings = false
-
-    // AirJumpFreeze values
+    // Matrix 模式相关变量
+    private var matrixJumped = false
+    private var matrixStartedBreaking = false
+    private var matrixFreezeEnabled = false
+    private var freezeX = 0.0
+    private var freezeY = 0.0
+    private var freezeZ = 0.0
     private var freezeMotionX = 0.0
     private var freezeMotionY = 0.0
     private var freezeMotionZ = 0.0
-    private var freezePosX = 0.0
-    private var freezePosY = 0.0
-    private var freezePosZ = 0.0
-    private var shouldFreeze = false
+    private var canJumpAgain = true // 是否可以再次跳跃（防止模块重复触发跳跃）
+
+    // Surroundings
+    private var areSurroundings = false
 
     override fun onToggle(state: Boolean) {
         if (pos != null && !mc.thePlayer.capabilities.isCreativeMode) {
@@ -111,26 +122,35 @@ object Fucker : Module("Fucker", Category.WORLD) {
         areSurroundings = false
         isOwnBed = false
 
-        // AirJumpFreeze reset
-        if (!state && shouldFreeze) {
-            shouldFreeze = false
-            mc.thePlayer.motionX = freezeMotionX
-            mc.thePlayer.motionY = freezeMotionY
-            mc.thePlayer.motionZ = freezeMotionZ
+        // 重置 Matrix 相关变量
+        matrixJumped = false
+        matrixStartedBreaking = false
+        if (matrixFreezeEnabled) {
+            disableMatrixFreeze()
         }
+        canJumpAgain = true
     }
 
     val onPacket = handler<PacketEvent> { event ->
         if (mc.thePlayer == null || mc.theWorld == null) return@handler
 
         val packet = event.packet
-        if (packet is S08PacketPlayerPosLook) {
-            spawnLocation = Vec3(packet.x, packet.y, packet.z)
+
+        // Matrix 模式：处理玩家移动数据包
+        if (matrixFreezeEnabled && packet is C03PacketPlayer) {
+            event.cancelEvent()
         }
 
-        // Cancel position packets when frozen
-        if (shouldFreeze && airJumpFreeze && packet is C03PacketPlayer) {
-            event.cancelEvent()
+        // 处理服务器位置同步数据包
+        if (packet is S08PacketPlayerPosLook) {
+            spawnLocation = Vec3(packet.x, packet.y, packet.z)
+
+            // Matrix 模式：如果处于冻结状态，更新冻结位置
+            if (matrixFreezeEnabled) {
+                freezeX = packet.x
+                freezeY = packet.y
+                freezeZ = packet.z
+            }
         }
     }
 
@@ -153,6 +173,10 @@ object Fucker : Module("Fucker", Category.WORLD) {
             areSurroundings = false
             isOwnBed = false
             obstructingPos = null
+            // 没有目标时重置 Matrix 状态，但不解除冻结
+            matrixJumped = false
+            matrixStartedBreaking = false
+            // 注意：这里不自动关闭冻结，只有按空格才能关闭
             return@handler
         }
 
@@ -162,6 +186,9 @@ object Fucker : Module("Fucker", Category.WORLD) {
         isOwnBed = ignoreOwnBed && isBedNearSpawn(currentPos)
         if (isOwnBed) {
             obstructingPos = null
+            matrixJumped = false
+            matrixStartedBreaking = false
+            // 如果是自己的床，也不解除冻结，只有按空格才能关闭
             return@handler
         }
 
@@ -212,6 +239,10 @@ object Fucker : Module("Fucker", Category.WORLD) {
         if (oldPos != null && oldPos != currentPos) {
             currentDamage = 0F
             switchTimer.reset()
+            // 目标变化时重置 Matrix 状态，但不解除冻结
+            matrixJumped = false
+            matrixStartedBreaking = false
+            // 注意：这里不自动关闭冻结，只有按空格才能关闭
         }
         oldPos = currentPos
 
@@ -244,41 +275,50 @@ object Fucker : Module("Fucker", Category.WORLD) {
         val world = mc.theWorld ?: return@handler
         val controller = mc.playerController ?: return@handler
 
-        // AirJumpFreeze functionality
-        if (airJumpFreeze) {
-            if (!shouldFreeze) {
-                // Check if we should activate freeze - when vertical velocity is near zero
-                if (player.motionY < 0.01 && player.motionY > -0.01) {
-                    freezePosX = player.posX
-                    freezePosY = player.posY
-                    freezePosZ = player.posZ
-                    freezeMotionX = player.motionX
-                    freezeMotionY = player.motionY
-                    freezeMotionZ = player.motionZ
-                    shouldFreeze = true
-                }
+        // 检查玩家是否按下了空格（跳跃键）
+        val jumpPressed = mc.gameSettings.keyBindJump.isKeyDown
 
-                // Jump if on ground
-                if (player.onGround) {
-                    player.jump()
-                }
-            } else {
-                // Freeze state - maintain position
-                player.motionX = 0.0
-                player.motionY = 0.0
-                player.motionZ = 0.0
-                player.setPositionAndRotation(freezePosX, freezePosY, freezePosZ, player.rotationYaw, player.rotationPitch)
-            }
+        // Matrix 模式：如果处于冻结状态，检查是否按下空格
+        if (matrixFreezeEnabled && jumpPressed && canJumpAgain) {
+            disableMatrixFreeze()
+            // 按下空格后，允许玩家正常跳跃
+            player.jump()
+            return@handler
         }
 
-        // 如果启用了 airJumpFreeze 但尚未冻结，则不执行挖掘操作
-        if (airJumpFreeze && !shouldFreeze) {
-            return@handler
+        // 如果刚刚解除冻结，重置canJumpAgain状态
+        if (!matrixFreezeEnabled && !canJumpAgain) {
+            canJumpAgain = true
+        }
+
+        // Matrix 模式：如果处于冻结状态，固定玩家位置
+        if (matrixFreezeEnabled) {
+            player.motionX = 0.0
+            player.motionY = 0.0
+            player.motionZ = 0.0
+            player.setPositionAndRotation(freezeX, freezeY, freezeZ, player.rotationYaw, player.rotationPitch)
         }
 
         var currentPos = pos ?: return@handler
         if (obstructingPos != null) {
             currentPos = obstructingPos!!
+        }
+
+        // Matrix 模式：检查是否需要跳跃和冻结
+        if (matrix && action == "Destroy" && !isOwnBed && !matrixFreezeEnabled && canJumpAgain) {
+            // 如果刚开始拆床（currentDamage 为 0），触发跳跃
+            if (currentDamage == 0F && !matrixJumped && !matrixStartedBreaking) {
+                // 触发跳跃
+                player.jump()
+                matrixJumped = true
+                matrixStartedBreaking = true
+                canJumpAgain = false // 禁止再次跳跃，直到按空格解除冻结
+            }
+
+            // 检查是否到达跳跃最高点（motionY <= 0 表示开始下落）
+            if (matrixJumped && player.motionY <= 0) {
+                enableMatrixFreeze()
+            }
         }
 
         val targetRotation = if (options.rotationsActive) {
@@ -295,6 +335,9 @@ object Fucker : Module("Fucker", Category.WORLD) {
                 isOwnBed = ignoreOwnBed && isBedNearSpawn(currentPos)
                 if (isOwnBed) {
                     obstructingPos = null
+                    // 如果是自己的床，不解除冻结（只有按空格才能关闭）
+                    matrixJumped = false
+                    matrixStartedBreaking = false
                     return@handler
                 }
 
@@ -306,6 +349,7 @@ object Fucker : Module("Fucker", Category.WORLD) {
                     if (swing) player.swingItem()
                     sendPacket(C07PacketPlayerDigging(STOP_DESTROY_BLOCK, currentPos, raytrace.sideHit))
                     clearTarget(currentPos)
+                    // 注意：方块被破坏后，不自动解除冻结，只有按空格才能关闭
                     return@handler
                 }
 
@@ -323,6 +367,7 @@ object Fucker : Module("Fucker", Category.WORLD) {
                         if (swing) player.swingItem()
                         controller.onPlayerDestroyBlock(currentPos, raytrace.sideHit)
                         clearTarget(currentPos)
+                        // 注意：方块被破坏后，不自动解除冻结，只有按空格才能关闭
                         return@handler
                     }
                 }
@@ -336,6 +381,7 @@ object Fucker : Module("Fucker", Category.WORLD) {
                     controller.onPlayerDestroyBlock(currentPos, raytrace.sideHit)
                     blockHitDelay = 4
                     clearTarget(currentPos)
+                    // 注意：方块被破坏后，不自动解除冻结，只有按空格才能关闭
                 }
             }
             // Use block
@@ -368,7 +414,65 @@ object Fucker : Module("Fucker", Category.WORLD) {
             )
         }
 
-        drawBlockBox(posToDraw, Color.RED, true)
+        // 修改ESP颜色为红色且不透明度为230
+        drawBlockBox(posToDraw, Color(255, 0, 0, 230), outline = false)
+    }
+
+    val onRender2D = handler<Render2DEvent> {
+        if (mc.thePlayer == null) return@handler
+        if (block.blockById == Blocks.air) return@handler
+        if (!blockProgress2D) return@handler
+
+        val scaledScreen = ScaledResolution(mc)
+
+        val progress = currentDamage.coerceIn(0F, 1F)
+        val percentage = (progress * 100).toInt()
+
+        if (progress == 0F) return@handler
+
+        val screenWidth = scaledScreen.scaledWidth.toFloat()
+        val screenHeight  = scaledScreen.scaledHeight.toFloat()
+
+        val barWidth = 200F
+        val barHeight = 10F
+        val barX = screenWidth/2 - barWidth/2
+        val barY = screenHeight / 2 + progressBeginY
+
+        // 添加阴影效果
+        ShowShadow(barX - 2, barY - 2, barWidth + 4, barHeight + 4, 0.3F)
+
+        RenderUtils.drawRoundedRect(barX, barY, barX + barWidth, barY + barHeight, Color(0, 0, 0, 100).rgb, 3F)
+
+        if (progress > 0F) RenderUtils.drawRoundedGradientRectCorner(
+            barX,
+            barY,
+            barX + (barWidth * progress) + 5,
+            barY + barHeight,
+            5f,
+            Color(150, 200, 230).rgb,
+            Color(100, 250, 200).rgb
+        )
+
+
+        val text = "$percentage%"
+        val GoogleSans35 = Fonts.fontGoogleSans35
+        val textWidth = GoogleSans35.getStringWidth(text)
+        val textX = barX + barWidth - textWidth - 2F
+        val textY = barY + (barHeight - GoogleSans35.FONT_HEIGHT) / 2F +1f
+
+        GoogleSans35.drawString(text, textX, textY, Color.WHITE.rgb, false)
+    }
+
+    /**
+     * 添加阴影效果函数
+     */
+    private fun ShowShadow(startX: Float, startY: Float, width: Float, height: Float, shadowStrength: Float) {
+        GlowUtils.drawGlow(
+            startX, startY,
+            width, height,
+            (shadowStrength * 13F).toInt(),
+            Color(0, 0, 0, 120)
+        )
     }
 
     /**
@@ -410,7 +514,8 @@ object Fucker : Module("Fucker", Category.WORLD) {
     }
 
     /**
-     * Clears the current target if it matches [currentPos] and resets related values.
+     * Clears the current target if it matches [currentPos] and resets相关值.
+     * 注意：这里不清除冻结状态，只有按空格才能关闭冻结
      */
     private fun clearTarget(currentPos: BlockPos) {
         if (currentPos == obstructingPos) {
@@ -421,6 +526,46 @@ object Fucker : Module("Fucker", Category.WORLD) {
         }
         areSurroundings = false
         currentDamage = 0F
+        // 清除目标时重置 Matrix 状态，但不解除冻结
+        matrixJumped = false
+        matrixStartedBreaking = false
+        // 注意：这里不调用 disableMatrixFreeze()，冻结只能通过按空格解除
+    }
+
+    /**
+     * 启用 Matrix 模式的冻结效果
+     */
+    private fun enableMatrixFreeze() {
+        val player = mc.thePlayer ?: return
+
+        // 记录当前位置和运动
+        freezeX = player.posX
+        freezeY = player.posY
+        freezeZ = player.posZ
+        freezeMotionX = player.motionX
+        freezeMotionY = player.motionY
+        freezeMotionZ = player.motionZ
+
+        matrixFreezeEnabled = true
+    }
+
+    /**
+     * 禁用 Matrix 模式的冻结效果
+     */
+    private fun disableMatrixFreeze() {
+        val player = mc.thePlayer ?: return
+
+        // 恢复运动
+        if (matrixFreezeEnabled) {
+            player.motionX = freezeMotionX
+            player.motionY = freezeMotionY
+            player.motionZ = freezeMotionZ
+            player.setPositionAndRotation(freezeX, freezeY, freezeZ, player.rotationYaw, player.rotationPitch)
+        }
+
+        matrixFreezeEnabled = false
+        matrixJumped = false
+        matrixStartedBreaking = false
     }
 
     override val tag

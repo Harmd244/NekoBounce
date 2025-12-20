@@ -1,12 +1,12 @@
 /*
- * LiquidBounce Hacked Client
+ * NekoBounce Hacked Client
  * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
- * https://github.com/CCBlueX/LiquidBounce/
+ * https://github.com/RouQingNeko1024/NekoBounce
+ * Code By GoldBounce,Lizz,NightSky,FDP
+ * https://github.com/SkidderMC/FDPClient
+ * https://github.com/qm123pz/NightSky-Client
+ * https://github.com/bzym2/GoldBounce/
  */
-
-//Skid RN_Random_Name JS
-//SKID GoldBounce
-//By Neko
 
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
@@ -21,8 +21,10 @@ import net.ccbluex.liquidbounce.utils.extensions.isMoving
 import net.ccbluex.liquidbounce.utils.inventory.InventoryUtils
 import net.ccbluex.liquidbounce.utils.inventory.SilentHotbar
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.hasMotion
+import net.ccbluex.liquidbounce.utils.timing.MSTimer
 import net.ccbluex.liquidbounce.utils.timing.TickTimer
 import net.minecraft.item.*
+import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.handshake.client.C00Handshake
 import net.minecraft.network.play.client.*
@@ -41,7 +43,7 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
 
     val swordMode by choices(
         "SwordMode",
-        arrayOf("None", "NCP", "UpdatedNCP", "AAC5", "SwitchItem", "InvalidC08", "Blink", "GrimAC", "postplace", "HYTBW32"),
+        arrayOf("None", "NCP", "UpdatedNCP", "AAC5", "SwitchItem", "InvalidC08", "Blink", "GrimAC", "postplace", "HYTBW32", "Matrix"),
         "None"
     )
 
@@ -86,6 +88,13 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
     private var hasDropped = false
     private var lastUsingRestItem = false
 
+    // Matrix模式相关变量
+    private var nextTemp = false
+    private var lastBlockingStat = false
+    private var waitC03 = false
+    private val packetBuf = mutableListOf<Packet<*>>()
+    private val msTimer = MSTimer()
+
     private val BlinkTimer = TickTimer()
 
     override fun onDisable() {
@@ -94,6 +103,13 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
         BlinkTimer.reset()
         BlinkUtils.unblink()
         lastUsingRestItem = false
+
+        // 重置Matrix模式相关变量
+        nextTemp = false
+        lastBlockingStat = false
+        waitC03 = false
+        packetBuf.clear()
+        msTimer.reset()
     }
 
     val onMotion = handler<MotionEvent> { event ->
@@ -103,6 +119,38 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
 
         if (!hasMotion && !shouldSwap)
             return@handler
+
+        // Matrix模式处理
+        if (swordMode == "Matrix" && (lastBlockingStat || isUsingItem)) {
+            if (msTimer.hasTimePassed(230) && nextTemp) {
+                nextTemp = false
+                sendPacket(C07PacketPlayerDigging(RELEASE_USE_ITEM, BlockPos(-1, -1, -1), EnumFacing.DOWN))
+
+                if (packetBuf.isNotEmpty()) {
+                    var canAttack = false
+                    for (packet in packetBuf) {
+                        if (packet is C03PacketPlayer) {
+                            canAttack = true
+                        }
+                        if (!((packet is C02PacketUseEntity || packet is C0APacketAnimation) && !canAttack)) {
+                            sendPacket(packet)
+                        }
+                    }
+                    packetBuf.clear()
+                }
+            }
+
+            if (!nextTemp) {
+                lastBlockingStat = isUsingItem
+                if (!isUsingItem) {
+                    return@handler
+                }
+                sendPacket(C08PacketPlayerBlockPlacement(BlockPos(-1, -1, -1), 255, player.inventory.getCurrentItem(), 0f, 0f, 0f))
+                nextTemp = true
+                waitC03 = false
+                msTimer.reset()
+            }
+        }
 
         if (isUsingItem || shouldSwap) {
             if (heldItem.item !is ItemSword && heldItem.item !is ItemBow && (consumeFoodOnly && heldItem.item is ItemFood ||
@@ -272,6 +320,10 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
                             sendPacket(C08PacketPlayerBlockPlacement(BlockPos(-1, -1, -1), 255, heldItem, 0f, 0f, 0f))
                         }
                     }
+
+                "Matrix" -> {
+                    // Matrix模式已在上面处理
+                }
             }
         }
     }
@@ -282,6 +334,17 @@ object NoSlow : Module("NoSlow", Category.MOVEMENT, gameDetecting = false) {
 
         if (event.isCancelled || shouldSwap)
             return@handler
+
+        // Matrix模式包处理
+        if (swordMode == "Matrix" && nextTemp) {
+            if ((packet is C07PacketPlayerDigging || packet is C08PacketPlayerBlockPlacement) && usingItemFunc()) {
+                event.cancelEvent()
+            } else if (packet is C03PacketPlayer || packet is C0APacketAnimation || packet is C0BPacketEntityAction ||
+                packet is C02PacketUseEntity || packet is C07PacketPlayerDigging || packet is C08PacketPlayerBlockPlacement) {
+                packetBuf.add(packet)
+                event.cancelEvent()
+            }
+        }
 
         // Credit: @ManInMyVan
         // TODO: Not sure how to fix random grim simulation flag. (Seem to only happen in Loyisa).

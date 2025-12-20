@@ -7,6 +7,7 @@ package net.ccbluex.liquidbounce.utils.render
 
 import net.ccbluex.liquidbounce.utils.attack.EntityUtils.getHealth
 import net.ccbluex.liquidbounce.utils.kotlin.RandomUtils.nextInt
+import net.ccbluex.liquidbounce.LiquidBounce
 import net.minecraft.entity.EntityLivingBase
 import org.lwjgl.opengl.GL11
 import java.awt.Color
@@ -121,7 +122,32 @@ object ColorUtils {
         return Color(red, green, blue)
     }
 
+    /**
+     * 修改后的rainbow函数：当NekoRainbowControl模块启用时，使用模块的rainbow函数
+     * 否则使用原版彩虹色
+     */
     fun rainbow(offset: Long = 400000L, alpha: Float = 1f): Color {
+        try {
+            // 获取模块管理器
+            val moduleManager = LiquidBounce.moduleManager
+            if (moduleManager != null) {
+                // 查找NekoRainbowControl模块
+                val nekoRainbowModule = moduleManager.getModule("NekoRainbowControl")
+                if (nekoRainbowModule != null && nekoRainbowModule.state) {
+                    // 模块启用，调用模块的rainbow方法
+                    // 使用Kotlin的as?安全转换
+                    val module = nekoRainbowModule as? net.ccbluex.liquidbounce.features.module.modules.render.NekoRainbowControl
+                    if (module != null) {
+                        return module.rainbow(offset, alpha)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // 如果出现异常，则使用原版彩虹色
+            // 可以在这里添加调试信息，如果需要的话
+        }
+        
+        // 原版彩虹色实现
         val currentColor = Color(Color.HSBtoRGB((System.nanoTime() + offset) / 10000000000F % 1, 1F, 1F))
         return Color(currentColor.red / 255F, currentColor.green / 255F, currentColor.blue / 255F, alpha)
     }

@@ -47,7 +47,7 @@ object Fly : Module("Fly", Category.MOVEMENT, Keyboard.KEY_F) {
         Vanilla, SmoothVanilla,
 
         // Matrix
-        Matrix,
+        Matrix,MatrixTest,
 
         // NCP
         NCP, OldNCP,
@@ -175,6 +175,14 @@ object Fly : Module("Fly", Category.MOVEMENT, Keyboard.KEY_F) {
     val options = RotationSettings(this) { mode == "Fireball" }
 
     val autoJump by boolean("AutoJump", true) { mode == "Fireball" }
+    val matrixPeriod by int("MatrixPeriod", 2, 1..20) { mode == "MatrixTest" }
+    val matrixMotionY1 by float("MatrixMotionY1", -0.04f, -0.3f..0f) { mode == "MatrixTest" }
+    val matrixMotionY2 by float("MatrixMotionY2", -0.04f, -0.3f..0f) { mode == "MatrixTest" }
+
+    val matrixTimerSpeed by float("MatrixTimer", 0.9f, 0.1f..1.0f) { mode == "MatrixTest" }
+    val matrixMoveTick by int("MatrixMoveTick", 20, 0..30) { mode == "MatrixTest" }
+    val matrixOnlyOnDamage by boolean("MatrixOnlyOnDamage", true) { mode == "MatrixTest" }
+    val matrixUseStuck by boolean("MatrixUseStuck", true) { mode == "MatrixTest" }
 
     // Visuals
     private val mark by boolean("Mark", true).subjective()
