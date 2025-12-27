@@ -25,6 +25,42 @@ You are allowed to
 
 this project entirely or partially for free and even commercially. However, please consider the following:
 
+## Code Contributions:
+
+-Raven XD
+-Acrimony
+-Vegaline
+-Excellent
+-Expensive
+-Slack
+-Untitled
+-Faiths
+-LiquidBounce (NextGen & Legacy)
+-Watami
+-Rise
+-Tenacity
+-Pulsive 5.0
+-Cubk's EventManager
+-Xylitol
+-Nexus
+-Atani
+-Ketamine
+-Radium
+-Actinium
+-Novoline Intent
+-LiquidBounce Plus
+-Eject
+-Eclipse
+-FDP
+-FDPX
+-GoldBounce
+-MoonLight
+-Lizz
+-Vorte
+-NightSky
+-QuickMarcoBounce
+-Augustus2.6
+
 - **You must disclose the source code of your modified work and the source code you took from this project. This means you are not allowed to use code from this project (even partially) in a closed-source (or even obfuscated) application.**
 - **Your modified application must also be licensed under the GPL** 
 
