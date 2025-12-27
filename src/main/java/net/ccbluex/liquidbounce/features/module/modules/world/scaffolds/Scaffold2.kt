@@ -1,4 +1,12 @@
-//Lizz
+/*
+ * NekoBounce Hacked Client
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/RouQingNeko1024/NekoBounce
+ * Code By GoldBounce,Lizz,NightSky,FDP
+ * https://github.com/SkidderMC/FDPClient
+ * https://github.com/qm123pz/NightSky-Client
+ * https://github.com/bzym2/GoldBounce/
+ */
 package net.ccbluex.liquidbounce.features.module.modules.world.scaffolds
 
 import net.ccbluex.liquidbounce.event.*
@@ -195,7 +203,7 @@ object Scaffold2 : Module("Scaffold2", Category.WORLD) {
     private val speedLimit by float("SpeedLimit", 0.11f, 0.01f..0.12f) { !slow && speedLimiter }
     private val slow by boolean("Slow", false)
     private val slowGround by boolean("SlowOnlyGround", false) { slow }
-    private val slowSpeed by float("SlowSpeed", 0.6f, 0.2f..1.0f) { slow }
+    private val slowSpeed by float("SlowSpeed", 0.6f, 0.2f..0.8f) { slow }
 
     // Jump Strafe
     private val jumpStrafe by boolean("JumpStrafe", false)

@@ -5,14 +5,10 @@ import net.ccbluex.liquidbounce.event.MotionEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
-import net.ccbluex.liquidbounce.utils.movement.MovementUtils
 import net.ccbluex.liquidbounce.utils.rotation.RotationUtils
-import net.ccbluex.liquidbounce.utils.extensions.getDistanceToEntityBox
 import net.ccbluex.liquidbounce.utils.timing.MSTimer
-import net.minecraft.entity.Entity
 import net.minecraft.entity.EntityLivingBase
 import net.minecraft.entity.item.EntityArmorStand
-import net.minecraft.util.AxisAlignedBB
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -30,6 +26,11 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
     private val speedDuration by float("SpeedDuration", 0.5f, 0.1f..2f) { enableProbabilitySpeed }
     private val probabilityMultiplier by float("ProbabilityMultiplier", 1.5f, 1f..3f) { enableProbabilitySpeed }
 
+    // Tick周期加速相关设置
+    private val enableTickBoost by boolean("TickBoost", false)
+    private val boostInterval by int("BoostInterval", 100, 1..1000) { enableTickBoost }
+    private val boostDuration by int("BoostDuration", 50, 1..1000) { enableTickBoost }
+
     private var offGroundTicks = 0
     private var isJumping = false
     
@@ -39,20 +40,37 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
     private val probabilityTimer = MSTimer()
     private var lastCheckTime = 0L
 
+    // Tick周期加速相关变量
+    private var tickCounter = 0
+    private var isTickBoostActive = false
+    private var boostRemainingTicks = 0
+    private var wasInRange = false
+
     // 添加标签显示
     override val tag: String?
         get() {
+            val tags = mutableListOf<String>()
+            
             if (enableProbabilitySpeed) {
                 val currentTime = System.currentTimeMillis()
                 if (hasSpeedBoost) {
                     val remainingTime = (speedBoostEndTime - currentTime) / 1000.0
-                    return String.format("%.1fs", remainingTime)
+                    tags.add(String.format("P:%.1fs", remainingTime))
                 } else {
                     val timeSinceLastCheck = (currentTime - lastCheckTime) / 1000.0
-                    return String.format("%.1fs", 1.0 - timeSinceLastCheck)
+                    tags.add(String.format("P:%.1fs", 1.0 - timeSinceLastCheck))
                 }
             }
-            return null
+            
+            if (enableTickBoost) {
+                if (isTickBoostActive) {
+                    tags.add("T:$boostRemainingTicks")
+                } else {
+                    tags.add("T:$tickCounter/$boostInterval")
+                }
+            }
+            
+            return if (tags.isEmpty()) null else tags.joinToString(" ")
         }
 
     val onUpdate = handler<MotionEvent> { event ->
@@ -84,9 +102,10 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
         // 只有在跳跃状态下才执行功能
         if (!isJumping) return@handler
 
-        val thePlayer = mc.thePlayer
+        val thePlayer = mc.thePlayer ?: return@handler
         val playerBox = thePlayer.entityBoundingBox.expand(1.0, 1.0, 1.0)
         var count = 0
+        var inRange = false
 
         for (entity in mc.theWorld.loadedEntityList) {
             if (entity is EntityLivingBase &&
@@ -97,10 +116,33 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
                 entity.entityId != -1337) {
 
                 count++
+                inRange = true
                 if (multiCount) {
                     break
                 }
             }
+        }
+
+        // Tick周期加速逻辑
+        if (enableTickBoost) {
+            tickCounter++
+            
+            if (!isTickBoostActive) {
+                // 检查是否应该开始加速
+                if (inRange && !wasInRange && tickCounter >= boostInterval) {
+                    isTickBoostActive = true
+                    boostRemainingTicks = boostDuration
+                    tickCounter = 0
+                }
+            } else {
+                // 更新加速剩余时间
+                boostRemainingTicks--
+                if (boostRemainingTicks <= 0) {
+                    isTickBoostActive = false
+                }
+            }
+            
+            wasInRange = inRange
         }
 
         // 概率速度逻辑
@@ -128,7 +170,13 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
             }
         }
 
-        if (count > 0) {
+        // 确定是否应该应用加速
+        val shouldApplyBoost = when {
+            enableTickBoost -> isTickBoostActive
+            else -> count > 0
+        }
+
+        if (shouldApplyBoost) {
             // 基础速度计算
             val baseStrafeOffset = count * speed
             val baseSpeedOffset = count * speed
@@ -199,27 +247,31 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
     }
 
     private fun getYaw(): Float {
+        val thePlayer = mc.thePlayer ?: return 0f
+        
         if (followTargetOnSpace && mc.gameSettings.keyBindJump.isKeyDown) {
-            val yaw = RotationUtils.targetRotation?.yaw ?: mc.thePlayer.rotationYaw
+            val yaw = RotationUtils.targetRotation?.yaw ?: thePlayer.rotationYaw
             if (antiVoid && isVoid(yaw)) {
                 return yaw + 180.0f
             }
             return yaw
         }
-        return mc.thePlayer.rotationYaw
+        return thePlayer.rotationYaw
     }
 
     private fun isVoid(yaw: Float): Boolean {
+        val thePlayer = mc.thePlayer ?: return false
+        
         val mx = -sin(Math.toRadians(yaw.toDouble()))
         val mz = cos(Math.toRadians(yaw.toDouble()))
-        val posX = mc.thePlayer.posX + (1.5 * mx)
-        val posZ = mc.thePlayer.posZ + (1.5 * mz)
+        val posX = thePlayer.posX + (1.5 * mx)
+        val posZ = thePlayer.posZ + (1.5 * mz)
 
         for (i in 0..15) {
             if (!mc.theWorld.isAirBlock(
                     net.minecraft.util.BlockPos(
                         posX,
-                        mc.thePlayer.posY - i,
+                        thePlayer.posY - i,
                         posZ
                     )
                 )) {
@@ -238,11 +290,23 @@ object MatrixEntityspeed : Module("MatrixEntityspeed", Category.MOVEMENT) {
         hasSpeedBoost = false
         lastCheckTime = 0L
         probabilityTimer.reset()
+        
+        // 重置Tick周期加速状态
+        tickCounter = 0
+        isTickBoostActive = false
+        boostRemainingTicks = 0
+        wasInRange = false
     }
     
     override fun onEnable() {
         // 初始化概率速度计时器
         lastCheckTime = System.currentTimeMillis()
         probabilityTimer.reset()
+        
+        // 初始化Tick周期加速状态
+        tickCounter = 0
+        isTickBoostActive = false
+        boostRemainingTicks = 0
+        wasInRange = false
     }
 }

@@ -41,6 +41,7 @@ object ModuleManager : Listenable, Collection<Module> by MODULE_REGISTRY {
 
         // Register modules
         val modules = arrayOf(
+                MoreKB,
                 MatrixEntityspeed,
                 Hub,
                 NekoRainbowControl,
