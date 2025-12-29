@@ -17,7 +17,7 @@ object Spammer : Module("Spammer", Category.MISC, subjective = true) {
 
     private val delay by intRange("Delay", 500..1000, 0..5000)
 
-    private val message by text("Message", "Disabler Vanilla | NekoBounce Get 1046055542")
+    private val message by text("Message", "aRE y0U 1Os3eR? tR3 n3K0b0Unc3! g3T t0 881914323")
 
     private val custom by boolean("Custom", false)
 
