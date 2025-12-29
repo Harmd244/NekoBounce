@@ -5,7 +5,7 @@
     
 杂牌水，但是这是猫娘的水
 
-本客户端的全部源代码可自由使用与修改，我对此不持异议。无需署名作者，惟请在文件头部添加项目链接以示出处，感谢您的理解。
+本客户端的全部源代码可自由使用与修改，我对此不持异议。无需署名作者，惟请在文件头部添加项目链接以示出处，禁止倒卖客户端，感谢您的理解。
 
 A free mixin-based injection hacked-client for Minecraft using Minecraft Forge, supporting version 1.8.9
 </div>
