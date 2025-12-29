@@ -1,13 +1,13 @@
 [
   {
-    "modid": "liquidbounce",
-    "name": "LiquidBounce",
-    "description": "A free mixin-based injection hacked-client",
+    "modid": "nekobounce",
+    "name": "NekoBounce",
+    "description": "A free hacked-client based liquidbounce, Skid by beimen_zcy",
     "version": "${version}",
     "mcversion": "1.8.9",
-    "url": "https://liquidbounce.net",
+    "url": "https://nekobounce.qzz.io",
     "updateUrl": "",
-    "authorList": ["CCBlueX"],
+    "authorList": ["CCBlueX", "beimen_zcy"],
     "credits": "",
     "logoFile": "",
     "screenshots": [],
